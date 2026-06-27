@@ -61,6 +61,7 @@ async function login() {
     const cred = await auth.signInWithEmailAndPassword(email, pass);
     state.user = cred.user;
     toast('✅ تم تسجيل الدخول');
+    loadUserData();
   } catch (e) {
     toast('❌ ' + (e.code === 'auth/user-not-found' ? 'الحساب غير موجود' : e.code === 'auth/wrong-password' ? 'كلمة مرور خاطئة' : 'خطأ في تسجيل الدخول'));
   }
@@ -118,15 +119,51 @@ function loadUserData() {
   db.ref('users/' + state.user.uid).once('value').then(snap => {
     const data = snap.val();
     if (data) {
+      // المستخدم موجود، نحمّل بياناته
       state.userData = data;
       updateLobbyUI();
       showScreen('lobbyScreen');
       initPeer();
       renderRooms();
+    } else {
+      // لا توجد بيانات (حالة نادرة)، ننشئ بيانات افتراضية
+      // لكن قبل الإنشاء، نتحقق من الـ IDs الموجودة لتجنب التكرار
+      db.ref('users').once('value').then(allUsersSnap => {
+        const allUsers = allUsersSnap.val() || {};
+        const existingIds = Object.values(allUsers).map(u => u.customId).filter(Boolean);
+        let newId;
+        if (Object.keys(allUsers).length === 0) {
+          newId = '10000'; // أول مستخدم هو المدير
+        } else {
+          do {
+            newId = generateId();
+          } while (existingIds.includes(newId));
+        }
+        
+        const newData = {
+          name: state.user.email.split('@')[0],
+          email: state.user.email,
+          customId: newId,
+          photoURL: '',
+          bio: '',
+          coins: 1000,
+          isAdmin: Object.keys(allUsers).length === 0, // المدير إذا كان الأول
+          createdAt: Date.now()
+        };
+        
+        db.ref('users/' + state.user.uid).set(newData).then(() => {
+          state.userData = newData;
+          updateLobbyUI();
+          showScreen('lobbyScreen');
+          initPeer();
+          renderRooms();
+        });
+      });
     }
+  }).catch(err => {
+    toast('❌ خطأ في جلب البيانات: ' + err.message);
   });
 }
-
 function updateLobbyUI() {
   if (!state.userData) return;
   document.getElementById('lobbyNameDisplay').textContent = state.userData.name;

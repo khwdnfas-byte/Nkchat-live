@@ -16,7 +16,7 @@
 <body>
 <div class="app" id="app">
 
-  <!-- Splash -->
+  <!-- Splash Screen -->
   <div class="screen active" id="splashScreen">
     <div class="splash-content">
       <div class="splash-icon"><i class="fa-solid fa-crown"></i></div>
@@ -28,7 +28,7 @@
     </div>
   </div>
 
-  <!-- Login -->
+  <!-- Login Screen -->
   <div class="screen" id="loginScreen">
     <div class="form-container">
       <div class="form-header">
@@ -44,7 +44,7 @@
     </div>
   </div>
 
-  <!-- Register -->
+  <!-- Register Screen -->
   <div class="screen" id="registerScreen">
     <div class="form-container">
       <div class="form-header">
@@ -59,7 +59,7 @@
     </div>
   </div>
 
-  <!-- Forgot -->
+  <!-- Forgot Password Screen -->
   <div class="screen" id="forgotScreen">
     <div class="form-container">
       <div class="form-header">
@@ -72,7 +72,7 @@
     </div>
   </div>
 
-  <!-- Lobby -->
+  <!-- Lobby Screen -->
   <div class="screen" id="lobbyScreen">
     <div class="lobby-header">
       <div class="lobby-user">
@@ -94,10 +94,10 @@
       <input class="input-field" id="joinRoomIdInput" placeholder="معرف الغرفة للانضمام">
       <button class="btn btn-glass btn-sm" onclick="joinById()">انضمام</button>
     </div>
-    <button class="fab" onclick="createRoom()"><i class="fa-solid fa-plus"></i></button>
+    <button class="fab" onclick="showCreateModal()"><i class="fa-solid fa-plus"></i></button>
   </div>
 
-  <!-- Room -->
+  <!-- Room Screen -->
   <div class="screen" id="roomScreen">
     <div class="room-header">
       <div class="room-info">

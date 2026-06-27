@@ -14,9 +14,9 @@ const db = firebase.database();
 const storage = firebase.storage();
 
 // ============ EmailJS Config ============
-(function(){ emailjs.init("YOUR_PUBLIC_KEY"); })(); // استبدل بمفتاحك
+emailjs.init("ILfMM-EFqQXbiBmeZ");
 
-// ============ Global State ============
+// ============ الحالة العامة ============
 const state = {
   user: null,
   userData: null,
@@ -33,11 +33,12 @@ const state = {
   viewedProfileUid: null
 };
 
-// ============ Helpers ============
+// ============ دوال مساعدة ============
 function toast(msg) {
   const t = document.getElementById('toast');
   if (!t) return;
-  t.textContent = msg; t.classList.add('show');
+  t.textContent = msg;
+  t.classList.add('show');
   setTimeout(() => t.classList.remove('show'), 3000);
 }
 
@@ -51,7 +52,7 @@ function generateId() {
   return Math.floor(100000 + Math.random() * 900000).toString();
 }
 
-// ============ Auth ============
+// ============ المصادقة ============
 async function login() {
   const email = document.getElementById('loginEmail').value.trim();
   const pass = document.getElementById('loginPassword').value.trim();
@@ -60,7 +61,7 @@ async function login() {
     const cred = await auth.signInWithEmailAndPassword(email, pass);
     state.user = cred.user;
     toast('✅ تم تسجيل الدخول');
-  } catch(e) {
+  } catch (e) {
     toast('❌ ' + (e.code === 'auth/user-not-found' ? 'الحساب غير موجود' : e.code === 'auth/wrong-password' ? 'كلمة مرور خاطئة' : 'خطأ في تسجيل الدخول'));
   }
 }
@@ -89,7 +90,7 @@ async function register() {
       createdAt: Date.now()
     });
     toast('✅ تم إنشاء الحساب. ID: ' + newId);
-  } catch(e) {
+  } catch (e) {
     toast('❌ ' + (e.code === 'auth/email-already-in-use' ? 'البريد مستخدم مسبقاً' : 'خطأ في إنشاء الحساب'));
   }
 }
@@ -98,7 +99,7 @@ function forgotPassword() {
   const email = document.getElementById('forgotEmail').value.trim();
   if (!email) return toast('يرجى إدخال البريد الإلكتروني');
   auth.sendPasswordResetEmail(email).then(() => {
-    toast('📧 تم إرسال رابط التعيين');
+    toast('📧 تم إرسال رابط إعادة التعيين إلى بريدك');
     showScreen('loginScreen');
   }).catch(() => toast('❌ البريد غير مسجل'));
 }
@@ -111,7 +112,7 @@ function logout() {
   closeSettings();
 }
 
-// ============ User Data ============
+// ============ بيانات المستخدم ============
 function loadUserData() {
   if (!state.user) return;
   db.ref('users/' + state.user.uid).once('value').then(snap => {
@@ -139,19 +140,21 @@ function initPeer() {
   if (state.peer) state.peer.destroy();
   state.peer = new Peer(undefined, {
     debug: 0,
-    config: { iceServers: [
-      { urls: 'stun:stun.l.google.com:19302' },
-      { urls: 'stun:stun1.l.google.com:19302' }
-    ]}
+    config: {
+      iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' },
+        { urls: 'stun:stun1.l.google.com:19302' }
+      ]
+    }
   });
   state.peer.on('open', id => {
     state.myPeerId = id;
-    document.getElementById('lobbyPeerId') && (document.getElementById('lobbyPeerId').textContent = id.slice(0,8)+'...');
+    db.ref('users/' + state.user.uid + '/peerId').set(id);
   });
   state.peer.on('call', async call => {
     if (!state.localStream) {
       try { state.localStream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false }); }
-      catch(e) { toast('يجب السماح بالميكروفون'); return; }
+      catch (e) { toast('يجب السماح بالميكروفون'); return; }
     }
     call.answer(state.localStream);
     handleCallStream(call);
@@ -166,18 +169,36 @@ function initPeer() {
 function handleCallStream(call) {
   call.on('stream', remoteStream => {
     state.remoteStreams[call.peer] = remoteStream;
-    const audio = new Audio(); audio.srcObject = remoteStream; audio.play().catch(()=>{});
+    const audio = new Audio();
+    audio.srcObject = remoteStream;
+    audio.play().catch(() => {});
   });
 }
 
-// ============ Room Management ============
+// ============ إدارة الغرف ============
+function showCreateModal() { document.getElementById('createModal').classList.add('show'); }
+function closeCreateModal() { document.getElementById('createModal').classList.remove('show'); }
+
+function previewRoomBg() {
+  const file = document.getElementById('roomBgInput').files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const img = document.getElementById('roomBgPreview');
+      img.src = e.target.result;
+      img.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+  }
+}
+
 function createRoom() {
   if (!state.userData) return toast('سجل الدخول أولاً');
   if (state.userData.hasRoom) return toast('لديك غرفة بالفعل');
-  const name = document.getElementById('newRoomName')?.value.trim() || 'غرفة ' + state.userData.name;
+  const name = document.getElementById('newRoomName').value.trim() || 'غرفة ' + state.userData.name;
   const roomId = state.userData.customId;
-  const bgFile = document.getElementById('roomBgInput')?.files[0];
-  
+  const bgFile = document.getElementById('roomBgInput').files[0];
+
   const roomData = {
     id: roomId,
     name,
@@ -218,7 +239,6 @@ function joinRoomById(roomId) {
     const room = snap.val();
     if (!room) return toast('الغرفة غير موجودة');
     state.currentRoom = room;
-    // Add to audience
     const aud = room.audience || [];
     if (!aud.includes(state.user.uid) && !room.speakers.includes(state.user.uid)) {
       aud.push(state.user.uid);
@@ -263,6 +283,29 @@ function enterRoomUI(room) {
   showScreen('roomScreen');
 }
 
+function addToStage(peerId) {
+  if (state.speakers.length >= 10) {
+    if (!state.audience.includes(peerId)) state.audience.push(peerId);
+  } else {
+    if (!state.speakers.includes(peerId)) state.speakers.push(peerId);
+  }
+  renderRoomUI();
+}
+
+function removeFromStage(peerId) {
+  state.speakers = state.speakers.filter(p => p !== peerId);
+  state.audience = state.audience.filter(p => p !== peerId);
+  renderRoomUI();
+}
+
+function handleData(sender, data) {
+  if (data.type === 'hand') toast(`✋ ${data.sender} يطلب الكلام`);
+  if (data.type === 'mic-state') {
+    if (data.active && !state.speakers.includes(sender)) addToStage(sender);
+    if (!data.active) removeFromStage(sender);
+  }
+}
+
 function renderRoomUI() {
   const grid = document.getElementById('micGrid');
   if (!grid) return;
@@ -286,20 +329,23 @@ function renderRoomUI() {
   if (audList) {
     audList.innerHTML = '';
     const allAud = state.audience.filter(a => !state.speakers.includes(a));
-    if (allAud.length === 0) audList.innerHTML = '<span style="color:var(--muted);font-size:12px;">لا يوجد مستمعون</span>';
-    allAud.forEach(a => {
-      db.ref('users/' + a + '/name').once('value').then(s => {
-        const tag = document.createElement('span');
-        tag.className = 'audience-tag';
-        tag.textContent = '👤 ' + (s.val()||'...');
-        tag.onclick = () => viewProfile(a);
-        audList.appendChild(tag);
+    if (allAud.length === 0) {
+      audList.innerHTML = '<span style="color:var(--muted);font-size:12px;">لا يوجد مستمعون</span>';
+    } else {
+      allAud.forEach(a => {
+        db.ref('users/' + a + '/name').once('value').then(s => {
+          const tag = document.createElement('span');
+          tag.className = 'audience-tag';
+          tag.textContent = '👤 ' + (s.val()||'...');
+          tag.onclick = () => viewProfile(a);
+          audList.appendChild(tag);
+        });
       });
-    });
+    }
   }
 }
 
-// ============ Profile ============
+// ============ الملف الشخصي ============
 function viewProfile(uid) {
   state.viewedProfileUid = uid;
   db.ref('users/' + uid).once('value').then(snap => {
@@ -312,19 +358,12 @@ function viewProfile(uid) {
   });
 }
 
-function closeProfile() { document.getElementById('profileModal').classList.remove('show'); }
-
-function inviteToMic() {
-  if (!state.viewedProfileUid || !state.currentRoom) return;
-  toast('🚀 تم إرسال دعوة للمايك');
-  closeProfile();
+function closeProfile() {
+  document.getElementById('profileModal').classList.remove('show');
 }
 
-function muteUser() {
-  if (!state.viewedProfileUid) return;
-  toast('🔇 تم كتم الصوت');
-  closeProfile();
-}
+function inviteToMic() { toast('🚀 تم إرسال دعوة للمايك'); closeProfile(); }
+function muteUser() { toast('🔇 تم كتم الصوت'); closeProfile(); }
 
 function kickUser() {
   if (!state.viewedProfileUid || !state.currentRoom) return;
@@ -333,23 +372,17 @@ function kickUser() {
   closeProfile();
 }
 
-function reportUser() {
-  if (!state.viewedProfileUid) return;
-  toast('🚩 تم إرسال البلاغ');
-  closeProfile();
-}
+function reportUser() { toast('🚩 تم إرسال البلاغ'); closeProfile(); }
+function inviteToRoom() { toast('📨 تم إرسال دعوة للغرفة'); closeProfile(); }
 
-function inviteToRoom() {
-  if (!state.viewedProfileUid) return;
-  toast('📨 تم إرسال دعوة للغرفة');
-  closeProfile();
-}
-
-// ============ Controls ============
-function toggleMic() {
+// ============ أدوات الغرفة ============
+async function toggleMic() {
   state.micEnabled = !state.micEnabled;
   const btn = document.getElementById('micBtn');
-  if (btn) { btn.classList.toggle('active', state.micEnabled); btn.classList.toggle('muted', !state.micEnabled); }
+  if (btn) {
+    btn.classList.toggle('active', state.micEnabled);
+    btn.classList.toggle('muted', !state.micEnabled);
+  }
   if (state.localStream) state.localStream.getAudioTracks().forEach(t => t.enabled = state.micEnabled);
   if (state.micEnabled && !state.speakers.includes(state.user.uid)) {
     state.speakers.push(state.user.uid);
@@ -362,6 +395,13 @@ function raiseHand() {
   state.handRaised = !state.handRaised;
   document.getElementById('handBtn')?.classList.toggle('active', state.handRaised);
   toast(state.handRaised ? '✋ طلبت الكلام' : 'أنزلت يدك');
+  broadcast({ type: 'hand', sender: state.userData.name });
+}
+
+function broadcast(data) {
+  Object.values(state.connections).forEach(c => {
+    if (c.conn && c.conn.open) c.conn.send(data);
+  });
 }
 
 function copyRoomLink() {
@@ -370,27 +410,23 @@ function copyRoomLink() {
 }
 
 function leaveRoom() {
-  Object.values(state.connections).forEach(c => { if (c.call) c.call.close(); if (c.conn) c.conn.close(); });
-  state.connections = {}; state.remoteStreams = {}; state.speakers = []; state.audience = []; state.currentRoom = null;
-  document.getElementById('micGrid') && (document.getElementById('micGrid').innerHTML = '');
-  document.getElementById('audienceList') && (document.getElementById('audienceList').innerHTML = '');
+  Object.values(state.connections).forEach(c => {
+    if (c.call) c.call.close();
+    if (c.conn) c.conn.close();
+  });
+  state.connections = {};
+  state.remoteStreams = {};
+  state.speakers = [];
+  state.audience = [];
+  state.currentRoom = null;
+  document.getElementById('micGrid').innerHTML = '';
+  document.getElementById('audienceList').innerHTML = '';
   showScreen('lobbyScreen');
 }
 
-// ============ Modals ============
-function showCreateModal() { document.getElementById('createModal').classList.add('show'); }
-function closeCreateModal() { document.getElementById('createModal').classList.remove('show'); }
+// ============ الإعدادات ============
 function showSettings() { document.getElementById('settingsModal').classList.add('show'); }
 function closeSettings() { document.getElementById('settingsModal').classList.remove('show'); }
-
-function previewRoomBg() {
-  const file = document.getElementById('roomBgInput').files[0];
-  if (file) {
-    const reader = new FileReader();
-    reader.onload = e => { const img = document.getElementById('roomBgPreview'); img.src = e.target.result; img.style.display = 'block'; };
-    reader.readAsDataURL(file);
-  }
-}
 
 function uploadAvatar() {
   const file = document.getElementById('avatarInput').files[0];
@@ -407,12 +443,15 @@ function saveProfile() {
   const bio = document.getElementById('settingsBio').value.trim();
   if (!name) return toast('الاسم مطلوب');
   db.ref('users/' + state.user.uid).update({ name, bio }).then(() => {
-    state.userData.name = name; state.userData.bio = bio;
-    updateLobbyUI(); closeSettings(); toast('✅ تم الحفظ');
+    state.userData.name = name;
+    state.userData.bio = bio;
+    updateLobbyUI();
+    closeSettings();
+    toast('✅ تم الحفظ');
   });
 }
 
-// ============ Lobby Rooms ============
+// ============ الردهة ============
 function renderRooms() {
   db.ref('rooms').on('value', snap => {
     const rooms = snap.val() || {};
@@ -434,7 +473,10 @@ function renderRooms() {
           <div class="room-title">${room.name}</div>
           <div class="room-meta">ID: ${room.id} · ${(room.speakers||[]).length+(room.audience||[]).length} مشارك</div>
         </div>
-        <div class="room-speakers">${(room.speakers||[]).slice(0,5).map(()=>'<span class="dot"></span>').join('')}${(room.audience||[]).length>0?'<span class="dot empty"></span>':''}</div>
+        <div class="room-speakers">
+          ${(room.speakers||[]).slice(0,5).map(() => '<span class="dot"></span>').join('')}
+          ${(room.audience||[]).length > 0 ? '<span class="dot empty"></span>' : ''}
+        </div>
       `;
       container.appendChild(card);
     });
@@ -446,13 +488,19 @@ function joinById() {
   if (id) joinRoomById(id);
 }
 
-// ============ Auth State ============
+// ============ مراقبة حالة المصادقة ============
 auth.onAuthStateChanged(user => {
-  if (user) { state.user = user; loadUserData(); }
-  else { state.user = null; state.userData = null; showScreen('loginScreen'); }
+  if (user) {
+    state.user = user;
+    loadUserData();
+  } else {
+    state.user = null;
+    state.userData = null;
+    showScreen('loginScreen');
+  }
 });
 
-// ============ Auto Join ============
+// ============ انضمام تلقائي عبر الرابط ============
 const params = new URLSearchParams(window.location.search);
 const roomParam = params.get('room');
 if (roomParam) {
@@ -461,4 +509,4 @@ if (roomParam) {
       if (state.user && state.userData) joinRoomById(roomParam);
     }, 2000);
   });
-      }
+}
